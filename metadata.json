@@ -1,0 +1,5 @@
+{
+  "name": "B.Tech Eligibility Evaluator",
+  "description": "A multi-user web application for collecting B.Tech (CSE) student eligibility data, persisting it to a shared Excel file, and syncing to Google Sheets.",
+  "requestFramePermissions": []
+}
