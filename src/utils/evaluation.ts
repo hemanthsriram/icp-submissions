@@ -1,4 +1,4 @@
-import { semesters } from '../data/subjects';
+import { semesters as cseSemesters, Semester } from '../data/subjects';
 
 export interface StudentData {
   name: string;
@@ -16,7 +16,7 @@ export interface ResultsMap {
   };
 }
 
-export function evaluateEligibility(results: ResultsMap, includeOther: boolean) {
+export function evaluateEligibility(results: ResultsMap, includeOther: boolean, semesterList: Semester[] = cseSemesters) {
   let totalCredits = 0;
   let coreCredits = 0;
   let mathCredits = 0;
@@ -25,7 +25,7 @@ export function evaluateEligibility(results: ResultsMap, includeOther: boolean) 
   let backlogSubjects: string[] = [];
   let mandatoryPassed = true;
 
-  semesters.forEach(sem => {
+  semesterList.forEach(sem => {
     sem.subjects.forEach(sub => {
       const isPassed = results[sem.id]?.[sub.name]?.passed ?? false;
       
@@ -64,3 +64,4 @@ export function evaluateEligibility(results: ResultsMap, includeOther: boolean) 
     crit4
   };
 }
+

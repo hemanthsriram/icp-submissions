@@ -1,47 +1,76 @@
-import fs from 'fs';
-import path from 'path';
-import { Mutex } from 'async-mutex';
+import { createClient } from '@supabase/supabase-js';
+import { supabase as fallbackSupabase, supabaseUrl, supabaseKey } from './supabase';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const FILE_PATH = path.join(DATA_DIR, 'submissions.json');
-const mutex = new Mutex();
-
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-export async function saveSubmission(submission: any) {
-  return await mutex.runExclusive(() => {
-    let submissions = [];
-    if (fs.existsSync(FILE_PATH)) {
-      const data = fs.readFileSync(FILE_PATH, 'utf-8');
-      try {
-        submissions = JSON.parse(data);
-      } catch (e) {
-        submissions = [];
-      }
-    }
-    
-    // Check if student already exists (by hall ticket)
-    const existingIndex = submissions.findIndex((s: any) => s.studentData.hallTicket === submission.studentData.hallTicket);
-    if (existingIndex !== -1) {
-      submissions[existingIndex] = { ...submission, timestamp: new Date().toISOString() };
-    } else {
-      submissions.push({ ...submission, timestamp: new Date().toISOString() });
-    }
-
-    fs.writeFileSync(FILE_PATH, JSON.stringify(submissions, null, 2));
+export function getScopedClient(token?: string) {
+  if (!token) return fallbackSupabase;
+  return createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
   });
 }
 
-export function getAllSubmissions() {
-  if (!fs.existsSync(FILE_PATH)) {
+export async function saveSubmission(submission: any, token?: string) {
+  const client = getScopedClient(token);
+  const { studentData, results, resultsWithOther, resultsWithoutOther } = submission;
+  
+  const { error } = await client.rpc('upsert_submission', {
+    p_hall_ticket: studentData.hallTicket,
+    p_branch: studentData.branch || 'CSE ICP',
+    p_student_data: studentData,
+    p_results: results,
+    p_results_with_other: resultsWithOther,
+    p_results_without_other: resultsWithoutOther
+  });
+    
+  if (error) {
+    console.error("Supabase Save Error:", error);
+    throw error;
+  }
+  return true;
+}
+
+export async function getAllSubmissions(token?: string, branch?: string) {
+  const client = getScopedClient(token);
+  let query = client
+    .from('submissions')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (branch) {
+    query = query.eq('branch', branch);
+  }
+  
+  const { data, error } = await query;
+    
+  if (error || !data) {
+    console.error("Supabase Fetch Error:", error);
     return [];
   }
-  const data = fs.readFileSync(FILE_PATH, 'utf-8');
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return [];
+  
+  // Re-map it to match the existing frontend expectations naturally
+  return data.map((row: any) => ({
+    studentData: row.student_data,
+    results: row.results,
+    resultsWithOther: row.results_with_other,
+    resultsWithoutOther: row.results_without_other,
+    timestamp: row.created_at
+  }));
+}
+
+export async function deleteSubmission(hallTicket: string, token?: string) {
+  const client = getScopedClient(token);
+  const { error, count } = await client
+    .from('submissions')
+    .delete({ count: 'exact' })
+    .eq('hall_ticket', hallTicket);
+    
+  if (error) {
+    console.error("Supabase Delete Error:", error);
+    throw error;
   }
+  
+  if (count === 0) {
+    throw new Error('Supabase Delete blocked by Row Level Security or Zero matches.');
+  }
+  
+  return await getAllSubmissions(token); // Re-fetch remaining list automatically
 }

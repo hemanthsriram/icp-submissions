@@ -70,19 +70,6 @@ function createSheet(student: any, results: any, includeOther: boolean) {
   ];
   XLSX.utils.sheet_add_aoa(ws, [dataRow], { origin: "A4" });
 
-  const footerStart = 6; // Leave row 5 blank
-  const footers = [
-    ["", "Note: Criteria 1: Completed 120 BTH credits during first three years of education: R23/R19/R20: 80 JNTUK Credits"],
-    ["", "Note: Criteria 2: Completed a minimum credits of 60 BTH credits within core field: R23/R19/R20: 40 JNTUK Credits"],
-    ["", "Note: Criteria 3: Completed a minimum credits of 15 BTH credits within mathematics: R23/R19/R20: 10 JNTUK Credits"],
-    ["", "Note: Criteria 4: Completed the Mandatory courses"]
-  ];
-  XLSX.utils.sheet_add_aoa(ws, footers, { origin: `A${footerStart}` });
-
-  for (let i = 0; i < 4; i++) {
-    ws['!merges'].push({ s: { r: footerStart - 1 + i, c: 1 }, e: { r: footerStart - 1 + i, c: 16 } });
-  }
-
   ws['!cols'] = [
     { wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 15 },
     { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },

@@ -26,7 +26,7 @@ export const semesters: Semester[] = [
       { name: 'IT Workshop', credits: 1, isOther: true },
       { name: 'Engineering Physics Lab', credits: 1 },
       { name: 'Electrical & Electronics Engineering Workshop', credits: 1.5 },
-      { name: 'Computer Programming Lab', credits: 1.5, isCore: true },
+      { name: 'Computer Programming Lab', credits: 1.5, isCore: true, isMandatory: true },
       { name: 'NSS/NCC/Scouts & Guides/Community Service', credits: 0.5 }
     ]
   },
@@ -56,7 +56,7 @@ export const semesters: Semester[] = [
       { name: 'Advanced Data Structures', credits: 3, isCore: true },
       { name: 'Object Oriented Programming Through Java', credits: 3, isCore: true, isMandatory: true },
       { name: 'Advanced Data Structures Lab', credits: 1.5, isCore: true },
-      { name: 'Object Oriented Programming Through Java Lab', credits: 1.5, isCore: true },
+      { name: 'Object Oriented Programming Through Java Lab', credits: 1.5, isCore: true, isMandatory: true },
       { name: 'Python Programming', credits: 2, isCore: true, isMandatory: true },
       { name: 'Environmental Science', credits: 0 }
     ]

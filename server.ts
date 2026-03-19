@@ -3,8 +3,11 @@ import cors from 'cors';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { evaluateEligibility } from './src/utils/evaluation';
+import { semesters as cseSemesters } from './src/data/subjects';
+import { aimlSemesters } from './src/data/subjects-aiml';
+import fs from 'fs';
 import { upsertStudentToExcel, getAllStudents, getExcelFilePath } from './server/excel';
-import { saveSubmission, getAllSubmissions } from './server/db';
+import { saveSubmission, getAllSubmissions, deleteSubmission } from './server/db';
 import { adminAuth } from './server/auth';
 import { connectGoogleSheets, initializeSheetsClient, isSheetsConnected, syncToGoogleSheets } from './server/sheets';
 
@@ -27,11 +30,14 @@ function notifyAdminClients() {
 app.post('/api/submit', async (req, res) => {
   try {
     const { studentData, results } = req.body;
+    const stream = studentData.branch || 'CSE ICP';
+    // Select the correct semester list for evaluation
+    const semesterList = stream === 'AIML ICP' ? aimlSemesters : cseSemesters;
     
-    const resultsWithOther = evaluateEligibility(results, true);
-    const resultsWithoutOther = evaluateEligibility(results, false);
+    const resultsWithOther = evaluateEligibility(results, true, semesterList);
+    const resultsWithoutOther = evaluateEligibility(results, false, semesterList);
 
-    await upsertStudentToExcel(studentData, resultsWithOther, resultsWithoutOther);
+    await upsertStudentToExcel(studentData, resultsWithOther, resultsWithoutOther, stream);
     await saveSubmission({ studentData, results, resultsWithOther, resultsWithoutOther });
     
     // Trigger Sheets Sync
@@ -49,15 +55,112 @@ app.post('/api/submit', async (req, res) => {
 });
 
 // Admin Routes
-app.get('/api/admin/dashboard', adminAuth, (req, res) => {
-  const students = getAllStudents();
-  const submissions = getAllSubmissions();
+app.post('/api/admin/rebuild', adminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    // Rebuild both streams
+    for (const stream of ['CSE ICP', 'AIML ICP']) {
+      const submissions = await getAllSubmissions(token, stream);
+      const filePath = getExcelFilePath(stream);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      for (const sub of submissions) {
+        await upsertStudentToExcel(sub.studentData, sub.resultsWithOther, sub.resultsWithoutOther, stream);
+      }
+    }
+    
+    if (isSheetsConnected()) {
+      await syncToGoogleSheets();
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to rebuild data' });
+  }
+});
+
+app.delete('/api/admin/student/:hallTicket', adminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const stream = (req.query.stream as string) || 'CSE ICP';
+    const list = await deleteSubmission(req.params.hallTicket, token);
+    
+    // Rebuild excel for the affected stream
+    const filePath = getExcelFilePath(stream);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    
+    // Filter remaining submissions for this stream only
+    const streamSubs = list.filter((s: any) => (s.studentData?.branch || 'CSE ICP') === stream);
+    for (const sub of streamSubs) {
+      await upsertStudentToExcel(sub.studentData, sub.resultsWithOther, sub.resultsWithoutOther, stream);
+    }
+    
+    if (isSheetsConnected()) {
+      await syncToGoogleSheets();
+    }
+    
+    notifyAdminClients();
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete student' });
+  }
+});
+
+app.put('/api/admin/student/:hallTicket', adminAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const { studentData, results } = req.body;
+    const stream = studentData.branch || 'CSE ICP';
+    
+    // Safety check - don't allow changing hallticket through this endpoint
+    if (studentData.hallTicket !== req.params.hallTicket) {
+      return res.status(400).json({ error: 'Cannot change hall ticket number.' });
+    }
+
+    // Use stream-aware evaluation
+    const semesterList = stream === 'AIML ICP' ? aimlSemesters : cseSemesters;
+    const resultsWithOther = evaluateEligibility(results, true, semesterList);
+    const resultsWithoutOther = evaluateEligibility(results, false, semesterList);
+
+    await saveSubmission({ studentData, results, resultsWithOther, resultsWithoutOther }, token);
+    
+    // Rebuild excel for this stream
+    const list = await getAllSubmissions(token, stream);
+    const filePath = getExcelFilePath(stream);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    
+    for (const sub of list) {
+      await upsertStudentToExcel(sub.studentData, sub.resultsWithOther, sub.resultsWithoutOther, stream);
+    }
+    
+    if (isSheetsConnected()) {
+      await syncToGoogleSheets();
+    }
+    
+    notifyAdminClients();
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update student' });
+  }
+});
+
+app.get('/api/admin/dashboard', adminAuth, async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const stream = (req.query.stream as string) || 'CSE ICP';
+  const students = getAllStudents(stream);
+  const submissions = await getAllSubmissions(token, stream);
   res.json({ students, submissions });
 });
 
 app.get('/api/admin/download', adminAuth, (req, res) => {
-  const filePath = getExcelFilePath();
-  res.download(filePath, 'eligibility_master.xlsx', (err) => {
+  const stream = (req.query.stream as string) || 'CSE ICP';
+  const filePath = getExcelFilePath(stream);
+  const filename = stream === 'AIML ICP' ? 'eligibility_master_aiml.xlsx' : 'eligibility_master_cse.xlsx';
+  res.download(filePath, filename, (err) => {
     if (err) {
       if (!res.headersSent) {
         res.status(404).send('File not found. No submissions yet.');

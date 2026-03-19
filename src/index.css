@@ -1,1 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&display=swap');
 @import "tailwindcss";
+
+@layer theme {
+  :root {
+    --font-sans: 'Funnel Display', sans-serif;
+    --font-mono: 'Geist Mono', monospace;
+    --color-primary: #3a4adf;
+    --color-secondary: #e3e0e7;
+    --color-cta: #3a4adf;
+    --color-background: #e3e0e7;
+    --color-text: #1e1b4b;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+    --shadow-xl: 0 20px 25px rgba(0,0,0,0.15);
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    background: var(--color-cta);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 200ms ease;
+    cursor: pointer;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+  }
+  .btn-primary:not(:disabled):hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--color-primary);
+    border: 2px solid var(--color-primary);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 200ms ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+  }
+  .btn-secondary:not(:disabled):hover {
+    background: rgba(58, 74, 223, 0.05);
+    transform: translateY(-1px);
+  }
+
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+    transition: all 200ms ease;
+  }
+  button.card:not(:disabled):hover, a.card:hover, .card-interactive:hover {
+    cursor: pointer;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+  }
+
+  .input {
+    padding: 12px 16px;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    font-size: 16px; /* prevents iOS zoom on focus */
+    transition: border-color 200ms ease;
+    width: 100%;
+    background: white;
+    color: var(--color-text);
+  }
+  .input:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(58, 74, 223, 0.2);
+  }
+}
+
+/* Mobile responsive overrides */
+@media (max-width: 640px) {
+  .card {
+    padding: 16px;
+    border-radius: 10px;
+  }
+  .btn-primary, .btn-secondary {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}

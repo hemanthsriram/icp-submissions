@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { semesters } from '../data/subjects';
+import { semesters as cseSemesters } from '../data/subjects';
+import { aimlSemesters } from '../data/subjects-aiml';
 import { ResultsMap, StudentData } from '../utils/evaluation';
 import { FileSpreadsheet } from 'lucide-react';
 import { StudentForm } from '../components/StudentForm';
@@ -10,20 +11,37 @@ import { ReviewScreen } from '../components/ReviewScreen';
 
 type Step = 'student' | 'all-pass' | 'semester' | 'review';
 
-export default function StudentFlow() {
+interface StudentFlowProps {
+  stream: string;
+}
+
+export default function StudentFlow({ stream }: StudentFlowProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('student');
   const [currentSemIndex, setCurrentSemIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Select the correct semester list based on the stream
+  const semesters = stream === 'AIML ICP' ? aimlSemesters : cseSemesters;
+  const streamRoute = stream === 'AIML ICP' ? '/aimlicp' : '/cseicp';
+
   const [studentData, setStudentData] = useState<StudentData>({
     name: '',
     hallTicket: '',
-    branch: 'CSE'
+    branch: stream
   });
 
   const [allPassSemesters, setAllPassSemesters] = useState<string[]>([]);
   const [results, setResults] = useState<ResultsMap>({});
+
+  // When the stream prop changes (e.g. from routing), reset the form state
+  useEffect(() => {
+    setStudentData(prev => ({ ...prev, branch: stream }));
+    setStep('student');
+    setCurrentSemIndex(0);
+    setAllPassSemesters([]);
+    setResults({});
+  }, [stream]);
 
   const handleStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +85,33 @@ export default function StudentFlow() {
     }
   };
 
+  const getPreviousSemIndex = (currentIndex: number) => {
+    let prevIndex = currentIndex - 1;
+    while (prevIndex >= 0 && allPassSemesters.includes(semesters[prevIndex].id)) {
+      prevIndex--;
+    }
+    return prevIndex;
+  };
+
+  const handleBackFromSemester = () => {
+    const prevIndex = getPreviousSemIndex(currentSemIndex);
+    if (prevIndex >= 0) {
+      setCurrentSemIndex(prevIndex);
+    } else {
+      setStep('all-pass');
+    }
+  };
+
+  const handleBackFromReview = () => {
+    const prevIndex = getPreviousSemIndex(semesters.length);
+    if (prevIndex >= 0) {
+      setCurrentSemIndex(prevIndex);
+      setStep('semester');
+    } else {
+      setStep('all-pass');
+    }
+  };
+
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -78,7 +123,7 @@ export default function StudentFlow() {
       
       if (response.ok) {
         const data = await response.json();
-        navigate('/success', { state: { studentData, results: data.resultsWithOther } });
+        navigate(`${streamRoute}/success`, { state: { studentData, results: data.resultsWithOther } });
       } else {
         alert('Failed to submit data. Please try again.');
       }
@@ -106,6 +151,8 @@ export default function StudentFlow() {
             selected={allPassSemesters} 
             onChange={setAllPassSemesters} 
             onSubmit={handleAllPassSubmit} 
+            onBack={() => setStep('student')}
+            semesters={semesters}
           />
         );
       case 'semester':
@@ -115,6 +162,7 @@ export default function StudentFlow() {
             semester={sem} 
             initialResults={results[sem.id] || {}}
             onSubmit={(res) => handleSemesterSubmit(sem.id, res)} 
+            onBack={handleBackFromSemester}
           />
         );
       case 'review':
@@ -122,32 +170,28 @@ export default function StudentFlow() {
           <ReviewScreen 
             studentData={studentData} 
             results={results} 
-            onRestart={() => {
-              setStep('student');
-              setResults({});
-              setAllPassSemesters([]);
-              setCurrentSemIndex(0);
-            }}
+            onBack={handleBackFromReview}
             onSubmit={handleFinalSubmit}
             isSubmitting={isSubmitting}
+            semesters={semesters}
           />
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans">
+      <header className="bg-white border-b border-stone-200/50 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-2">
-          <FileSpreadsheet className="w-6 h-6 text-indigo-600" />
-          <h1 className="text-xl font-semibold tracking-tight">Eligibility Evaluator</h1>
+          <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--color-primary)]" />
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--color-primary)]">ICP</h1>
         </div>
-        <div className="text-sm font-medium text-slate-500">
-          JNTUK R23/R20/R19
+        <div className="text-xs sm:text-sm font-medium text-[var(--color-text)] opacity-70">
+          {stream}
         </div>
       </header>
       
-      <main className="max-w-3xl mx-auto p-6 mt-8">
+      <main className="max-w-3xl mx-auto p-4 sm:p-6 mt-4 sm:mt-8">
         {renderStep()}
       </main>
     </div>

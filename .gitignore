@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Sensitive data
+config/
+data/
+*.db

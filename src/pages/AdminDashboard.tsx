@@ -1,28 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { Download, RefreshCw, Users, CheckCircle2, AlertCircle, XCircle, Settings, Link as LinkIcon, BookOpen, FileText } from 'lucide-react';
 import SyllabusView from '../components/SyllabusView';
+import StudentDetailCard from '../components/StudentDetailCard';
+import { supabase } from '../lib/supabase';
+import { semesters as cseSemesters } from '../data/subjects';
+import { aimlSemesters } from '../data/subjects-aiml';
 
 export default function AdminDashboard() {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [token, setToken] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [sheetsConnected, setSheetsConnected] = useState(false);
   const [showSheetsModal, setShowSheetsModal] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [activeStream, setActiveStream] = useState<'CSE ICP' | 'AIML ICP'>('CSE ICP');
   const [activeTab, setActiveTab] = useState<'submissions' | 'syllabus'>('submissions');
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/dashboard', {
-        headers: { Authorization: `Bearer ${password}` }
+      const res = await fetch(`/api/admin/dashboard?stream=${encodeURIComponent(activeStream)}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
         setStudents(data.students);
+        setSubmissions(data.submissions || []);
         setLastUpdated(new Date());
-      } else if (res.status === 401) {
+      } else if (res.status === 401 || res.status === 403) {
         setIsAuthenticated(false);
       }
     } catch (error) {
@@ -35,7 +44,7 @@ export default function AdminDashboard() {
   const checkSheetsStatus = async () => {
     try {
       const res = await fetch('/api/admin/sheets/status', {
-        headers: { Authorization: `Bearer ${password}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -47,11 +56,11 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && token) {
       fetchDashboardData();
       checkSheetsStatus();
 
-      const eventSource = new EventSource(`/api/admin/stream?token=${encodeURIComponent(password)}`);
+      const eventSource = new EventSource(`/api/admin/stream?token=${encodeURIComponent(token)}`);
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'UPDATE') {
@@ -61,22 +70,44 @@ export default function AdminDashboard() {
 
       return () => eventSource.close();
     }
-  }, [isAuthenticated, password]);
+  }, [isAuthenticated, token, activeStream]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const loginMap: Record<string, string> = {
+    'Hemanth': 'hemanth@admin.cse',
+    'Viswa': 'viswa@admin.aiml'
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAuthenticated(true); // Will be verified on first fetch
+    setLoading(true);
+    
+    const email = loginMap[username] || username;
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error || !data.session) {
+      alert("Invalid credentials. Please verify your Username and Password.");
+      setLoading(false);
+      return;
+    }
+
+    setToken(data.session.access_token);
+    setIsAuthenticated(true);
+    setLoading(false);
   };
 
   const handleDownload = () => {
-    window.location.href = `/api/admin/download?token=${encodeURIComponent(password)}`; // Simplistic auth for download
+    window.location.href = `/api/admin/download?stream=${encodeURIComponent(activeStream)}&token=${encodeURIComponent(token)}`;
   };
 
   const handleSyncSheets = async () => {
     try {
       await fetch('/api/admin/sheets/sync', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${password}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       alert('Sync triggered successfully.');
     } catch (error) {
@@ -86,20 +117,31 @@ export default function AdminDashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full">
-          <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">Admin Login</h2>
+      <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center p-6">
+        <form onSubmit={handleLogin} className="card max-w-sm w-full">
+          <h2 className="text-2xl font-bold text-[var(--color-text)] mb-6 text-center">Admin Login</h2>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-stone-700 mb-2">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="input"
+              placeholder="Enter username"
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-stone-700 mb-2">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="input"
               required
             />
           </div>
-          <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-xl transition-colors">
+          <button type="submit" className="w-full btn-primary">
             Login
           </button>
         </form>
@@ -108,35 +150,61 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-[var(--color-background)] p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-        <header className="flex items-center justify-between mb-8">
+        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
-            <p className="text-sm text-slate-500">Last updated: {lastUpdated.toLocaleTimeString()}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-primary)]">Admin Dashboard</h1>
+            <p className="text-xs sm:text-sm text-stone-500">Last updated: {lastUpdated.toLocaleTimeString()}</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${sheetsConnected ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <div className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium ${sheetsConnected ? 'bg-[var(--color-cta)]/10 text-[var(--color-cta)] border border-[var(--color-cta)]/20' : 'bg-stone-100 text-stone-600 border border-stone-200'}`}>
               <LinkIcon className="w-4 h-4" />
-              {sheetsConnected ? 'Sheets Connected' : 'Sheets Not Connected'}
+              <span className="hidden sm:inline">{sheetsConnected ? 'Sheets Connected' : 'Sheets Not Connected'}</span>
+              <span className="sm:hidden">{sheetsConnected ? 'Connected' : 'Offline'}</span>
             </div>
-            <button onClick={() => setShowSheetsModal(true)} className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg transition-colors">
+            <button onClick={() => setShowSheetsModal(true)} className="p-2 text-stone-500 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer">
               <Settings className="w-5 h-5" />
             </button>
-            <button onClick={handleDownload} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+            <button onClick={handleDownload} className="btn-primary text-sm">
               <Download className="w-4 h-4" />
-              Download Excel
+              <span className="hidden sm:inline">Download Excel</span>
             </button>
           </div>
         </header>
 
-        <div className="flex items-center gap-2 mb-8 bg-white p-1 rounded-xl border border-slate-200 w-fit">
+        {/* Stream Toggle - Top Level */}
+        <div className="flex items-center gap-2 mb-4 bg-white p-1.5 rounded-xl border border-stone-200 w-full sm:w-fit shadow-sm">
+          <button
+            onClick={() => { setActiveStream('CSE ICP'); setActiveTab('submissions'); }}
+            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              activeStream === 'CSE ICP'
+                ? 'bg-[var(--color-primary)] text-white shadow-md'
+                : 'text-stone-600 hover:bg-stone-50'
+            }`}
+          >
+            CSE ICP
+          </button>
+          <button
+            onClick={() => { setActiveStream('AIML ICP'); setActiveTab('submissions'); }}
+            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              activeStream === 'AIML ICP'
+                ? 'bg-[var(--color-primary)] text-white shadow-md'
+                : 'text-stone-600 hover:bg-stone-50'
+            }`}
+          >
+            AIML ICP
+          </button>
+        </div>
+
+        {/* Sub-tabs: Submissions / Syllabus */}
+        <div className="flex items-center gap-2 mb-6 sm:mb-8 bg-white p-1 rounded-xl border border-stone-200 w-full sm:w-fit shadow-sm">
           <button
             onClick={() => setActiveTab('submissions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'submissions'
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                : 'text-stone-600 hover:bg-stone-50 hover:text-[var(--color-primary)]'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -144,10 +212,10 @@ export default function AdminDashboard() {
           </button>
           <button
             onClick={() => setActiveTab('syllabus')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'syllabus'
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                : 'text-stone-600 hover:bg-stone-50 hover:text-[var(--color-primary)]'
             }`}
           >
             <BookOpen className="w-4 h-4" />
@@ -158,63 +226,47 @@ export default function AdminDashboard() {
         {activeTab === 'submissions' ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <div className="card !p-6 flex flex-col justify-center">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Users className="w-5 h-5" /></div>
-                  <h3 className="text-sm font-medium text-slate-500">Total Submissions</h3>
+                  <div className="p-2 bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-lg"><Users className="w-5 h-5" /></div>
+                  <h3 className="text-sm font-medium text-stone-500">{activeStream} Submissions</h3>
                 </div>
-                <div className="text-3xl font-bold text-slate-900">{students.length}</div>
+                <div className="text-3xl font-bold text-[var(--color-text)]">{submissions.length}</div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Sl.No</th>
-                      <th className="px-6 py-4 font-medium">Hall Ticket</th>
-                      <th className="px-6 py-4 font-medium">Name</th>
-                      <th className="px-6 py-4 font-medium text-center">Credits</th>
-                      <th className="px-6 py-4 font-medium text-center">Core</th>
-                      <th className="px-6 py-4 font-medium text-center">Math</th>
-                      <th className="px-6 py-4 font-medium text-center">Backlogs</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {students.map((student, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 text-slate-500">{student['Sl.No']}</td>
-                        <td className="px-6 py-4 font-medium text-slate-900 uppercase">{student['Hall Ticket']}</td>
-                        <td className="px-6 py-4 text-slate-700">{student['Student Name']}</td>
-                        <td className="px-6 py-4 text-center font-medium">{student['Total Credits']}</td>
-                        <td className="px-6 py-4 text-center">{student['Core Credits (with OTHER)']}</td>
-                        <td className="px-6 py-4 text-center">{student['Math Credits']}</td>
-                        <td className="px-6 py-4 text-center text-rose-600 font-medium">{student['Total Backlogs']}</td>
-                      </tr>
-                    ))}
-                    {students.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
-                          No submissions yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+
+            <div className="space-y-4">
+              {[...submissions]
+                .sort((a, b) => (a.studentData?.hallTicket || '').toUpperCase().localeCompare((b.studentData?.hallTicket || '').toUpperCase()))
+                .map((sub, idx) => (
+                <StudentDetailCard 
+                  key={sub.studentData.hallTicket || idx} 
+                  submission={sub} 
+                  index={idx} 
+                  adminToken={token} 
+                  onUpdate={fetchDashboardData}
+                  stream={activeStream}
+                  semesters={activeStream === 'AIML ICP' ? aimlSemesters : cseSemesters}
+                />
+              ))}
+              {submissions.length === 0 && (
+                <div className="card text-center py-12 text-stone-500">
+                  No {activeStream} submissions yet.
+                </div>
+              )}
             </div>
           </>
         ) : (
-          <SyllabusView />
+          <SyllabusView semesters={activeStream === 'AIML ICP' ? aimlSemesters : cseSemesters} />
         )}
       </div>
 
       {showSheetsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Google Sheets Sync</h3>
-            <p className="text-sm text-slate-500 mb-6">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="card w-full max-w-md !p-6 sm:!p-8 mx-4 sm:mx-0">
+            <h3 className="text-lg font-bold text-[var(--color-primary)] mb-4">Google Sheets Sync</h3>
+            <p className="text-sm text-stone-500 mb-6">
               Connect a Google Sheet to mirror the eligibility data in real-time.
             </p>
             
@@ -226,7 +278,7 @@ export default function AdminDashboard() {
                   method: 'POST',
                   headers: { 
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${password}` 
+                    Authorization: `Bearer ${token}` 
                   },
                   body: JSON.stringify({
                     sheetId: formData.get('sheetId'),
@@ -245,23 +297,23 @@ export default function AdminDashboard() {
             }}>
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Google Sheet ID</label>
-                  <input name="sheetId" type="text" defaultValue="1RWI6kVygmaC_XrS3oXe4AbADIwytpvl36Nm1xr2WUV0" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="1BxiMVs0XRYFgwnV..." required />
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Google Sheet ID</label>
+                  <input name="sheetId" type="text" defaultValue="1RWI6kVygmaC_XrS3oXe4AbADIwytpvl36Nm1xr2WUV0" className="input" placeholder="1BxiMVs0XRYFgwnV..." required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Service Account JSON</label>
-                  <textarea name="credentials" rows={4} className="w-full px-3 py-2 border rounded-lg text-sm font-mono" placeholder="{...}" required></textarea>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Service Account JSON</label>
+                  <textarea name="credentials" rows={4} className="input font-mono block" placeholder="{...}" required></textarea>
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowSheetsModal(false)} className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium">Cancel</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">Connect</button>
+                <button type="button" onClick={() => setShowSheetsModal(false)} className="flex-1 btn-secondary">Cancel</button>
+                <button type="submit" className="flex-1 btn-primary">Connect</button>
               </div>
             </form>
             
             {sheetsConnected && (
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <button onClick={handleSyncSheets} className="w-full px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+              <div className="mt-6 pt-6 border-t border-stone-100">
+                <button onClick={handleSyncSheets} className="w-full btn-secondary text-[var(--color-primary)] border-none bg-[var(--color-primary)]/5 hover:bg-[var(--color-primary)]/10">
                   <RefreshCw className="w-4 h-4" />
                   Force Full Sync
                 </button>

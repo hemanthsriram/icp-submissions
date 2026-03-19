@@ -2,30 +2,115 @@ import XLSX from 'xlsx';
 import fs from 'fs';
 import path from 'path';
 import { Mutex } from 'async-mutex';
+import { semesters as cseSemesters, Semester } from '../src/data/subjects';
+import { aimlSemesters } from '../src/data/subjects-aiml';
+
+const SUBJECT_SHORT_NAMES: Record<string, string> = {
+  "Engineering Physics": "PHY",
+  "Linear Algebra & Calculus": "M1",
+  "Basic Electrical & Electronics Engineering": "BEEE",
+  "Engineering Graphics": "EG",
+  "Introduction to Programming": "C",
+  "IT Workshop": "IT",
+  "Engineering Physics Lab": "PHY LAB",
+  "Electrical & Electronics Engineering Workshop": "EEE LAB",
+  "Computer Programming Lab": "C LAB",
+  "NSS/NCC/Scouts & Guides/Community Service": "NSS",
+  "Communicative English": "ENG",
+  "Chemistry": "CHEM",
+  "Differential Equations & Vector Calculus": "M2",
+  "Basic Civil & Mechanical Engineering": "BCME",
+  "Data Structures": "DS",
+  "Communicative English Lab": "ENG LAB",
+  "Chemistry Lab": "CHEM LAB",
+  "Engineering Workshop": "WORKSHOP",
+  "Data Structures Lab": "DS LAB",
+  "Health and wellness, Yoga and Sports": "YOGA & SPORTS",
+  "Discrete Mathematics & Graph Theory": "M3",
+  "Managerial Economics and Financial Analysis": "MEFA",
+  "Computer Organization & Architecture": "COA",
+  "Advanced Data Structures": "ADS",
+  "Object Oriented Programming Through Java": "OOPJ",
+  "Advanced Data Structures Lab": "ADS LAB",
+  "Object Oriented Programming Through Java Lab": "OOPJ LAB",
+  "Python Programming": "PYTHON",
+  "Environmental Science": "ES",
+  "Universal Human Values": "UHV",
+  "Probability & Statistics": "M4",
+  "Operating Systems": "OS",
+  "Database Management Systems": "DBMS",
+  "Software Engineering": "SE",
+  "Operating Systems Lab": "OS LAB",
+  "Database Management Systems Lab": "DBMS LAB",
+  "Full Stack Development - I": "FSD I",
+  "Design Thinking & Innovation": "DTI",
+  "Data Warehousing and Data Mining": "DWDM",
+  "Computer Networks": "CN",
+  "Formal Languages and Automata Theory": "FLAT",
+  "Design and Analysis of Algorithms": "DAA",
+  "Open Elective-I": "OE I",
+  "Data Mining Lab": "DM LAB",
+  "Computer Networks Lab": "CN LAB",
+  "Full Stack Development - II": "FSD II",
+  "UI Design using Flutter": "UIDF",
+  "Evaluation of Community Service Internship": "Community service",
+  // AIML ICP specific short names
+  "Universal Human Values – Understanding Harmony": "UHV",
+  "Artificial Intelligence": "AI",
+  "Optimization Techniques": "OT",
+  "Machine Learning": "ML",
+  "Machine Learning Lab": "ML LAB",
+  "Full Stack Development-1": "FSD I",
+  "Information Retrieval Systems": "IRS",
+  "Automata Theory & Compiler Design": "ATCD",
+  "Information Retrieval Lab": "IRS LAB",
+  "Full Stack Development-2": "FSD II",
+  "User Interface Design using Flutter": "UIDF",
+  "Community Service Project Internship": "Community service"
+};
+
+function formatBacklog(subjectName: string, semesterList: Semester[]): string {
+  const shortName = SUBJECT_SHORT_NAMES[subjectName] || subjectName;
+  let isMandatory = false;
+  for (const sem of semesterList) {
+    const sub = sem.subjects.find(s => s.name === subjectName);
+    if (sub && sub.isMandatory) {
+      isMandatory = true;
+      break;
+    }
+  }
+  return isMandatory ? `${shortName}(M)` : shortName;
+}
 
 const DATA_DIR = path.join(process.cwd(), 'data');
-const FILE_PATH = path.join(DATA_DIR, 'eligibility_master.xlsx');
 const mutex = new Mutex();
+
+function getFilePath(stream: string = 'CSE ICP') {
+  const suffix = stream === 'AIML ICP' ? 'aiml' : 'cse';
+  return path.join(DATA_DIR, `eligibility_master_${suffix}.xlsx`);
+}
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-export async function upsertStudentToExcel(studentData: any, resultsWithOther: any, resultsWithoutOther: any) {
+export async function upsertStudentToExcel(studentData: any, resultsWithOther: any, resultsWithoutOther: any, stream: string = 'CSE ICP') {
   return await mutex.runExclusive(() => {
+    const filePath = getFilePath(stream);
+    const semesterList = stream === 'AIML ICP' ? aimlSemesters : cseSemesters;
     let wb: XLSX.WorkBook;
     
-    if (fs.existsSync(FILE_PATH)) {
-      wb = XLSX.readFile(FILE_PATH);
+    if (fs.existsSync(filePath)) {
+      wb = XLSX.readFile(filePath);
     } else {
       wb = createInitialWorkbook();
     }
 
-    upsertRowToSheet(wb.Sheets["With OTHER"], studentData, resultsWithOther, true);
-    upsertRowToSheet(wb.Sheets["Without OTHER"], studentData, resultsWithoutOther, false);
+    upsertRowToSheet(wb.Sheets["With OTHER"], studentData, resultsWithOther, true, semesterList);
+    upsertRowToSheet(wb.Sheets["Without OTHER"], studentData, resultsWithoutOther, false, semesterList);
     upsertSummaryRow(wb.Sheets["Summary"], studentData, resultsWithOther, resultsWithoutOther);
 
-    XLSX.writeFile(wb, FILE_PATH);
+    XLSX.writeFile(wb, filePath);
     return wb;
   });
 }
@@ -164,29 +249,9 @@ function removeFooters(ws: XLSX.WorkSheet, startRow: number) {
   }
 }
 
-function appendFooters(ws: XLSX.WorkSheet) {
-  const range = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
-  const footerStart = range.e.r + 2; // Leave one blank row
 
-  const footers = [
-    ["", "Note: Criteria 1: Completed 120 BTH credits during first three years of education: R23/R19/R20: 80 JNTUK Credits"],
-    ["", "Note: Criteria 2: Completed a minimum credits of 60 BTH credits within core field: R23/R19/R20: 40 JNTUK Credits"],
-    ["", "Note: Criteria 3: Completed a minimum credits of 15 BTH credits within mathematics: R23/R19/R20: 10 JNTUK Credits"],
-    ["", "Note: Criteria 4: Completed the Mandatory courses"]
-  ];
-  XLSX.utils.sheet_add_aoa(ws, footers, { origin: `A${footerStart + 1}` });
 
-  if (!ws['!merges']) ws['!merges'] = [];
-  for (let i = 0; i < 4; i++) {
-    ws['!merges'].push({ s: { r: footerStart + i, c: 1 }, e: { r: footerStart + i, c: 16 } });
-  }
-  
-  const newRange = XLSX.utils.decode_range(ws['!ref'] || "A1:A1");
-  newRange.e.r = Math.max(newRange.e.r, footerStart + 3);
-  ws['!ref'] = XLSX.utils.encode_range(newRange);
-}
-
-function upsertRowToSheet(ws: XLSX.WorkSheet, student: any, results: any, includeOther: boolean) {
+function upsertRowToSheet(ws: XLSX.WorkSheet, student: any, results: any, includeOther: boolean, semesterList: Semester[] = cseSemesters) {
   const startRow = 3; // 0-indexed, so row 4 is index 3
   removeFooters(ws, startRow);
 
@@ -209,22 +274,21 @@ function upsertRowToSheet(ws: XLSX.WorkSheet, student: any, results: any, includ
     student.hallTicket,
     student.name,
     results.totalCredits,
-    results.totalCredits,
-    results.coreCredits,
-    results.mathCredits,
-    results.mandatoryPassed ? "Yes" : "No",
+    results.crit1 ? "CLEARED" : "NOT CLEARED",
+    results.crit2 ? "CLEARED" : "NOT CLEARED",
+    results.crit3 ? "CLEARED" : "NOT CLEARED",
+    results.crit4 ? "CLEARED" : "NOT CLEARED",
     results.crit1 ? "YES" : "NO",
     results.crit2 ? "YES" : "NO",
     results.crit3 ? "YES" : "NO",
     results.crit4 ? "YES" : "NO",
     results.mandatoryBacklogs,
     results.totalBacklogs,
-    results.backlogSubjects.join(", "),
+    results.backlogSubjects.map((s: string) => formatBacklog(s, semesterList)).join(", "),
     ""
   ];
 
   XLSX.utils.sheet_add_aoa(ws, [dataRow], { origin: `A${rowIndex + 1}` });
-  appendFooters(ws);
 }
 
 function upsertSummaryRow(ws: XLSX.WorkSheet, student: any, resWith: any, resWithout: any) {
@@ -261,11 +325,12 @@ function upsertSummaryRow(ws: XLSX.WorkSheet, student: any, resWith: any, resWit
   XLSX.utils.sheet_add_aoa(ws, [dataRow], { origin: `A${rowIndex + 1}` });
 }
 
-export function getAllStudents() {
-  if (!fs.existsSync(FILE_PATH)) {
+export function getAllStudents(stream: string = 'CSE ICP') {
+  const filePath = getFilePath(stream);
+  if (!fs.existsSync(filePath)) {
     return [];
   }
-  const wb = XLSX.readFile(FILE_PATH);
+  const wb = XLSX.readFile(filePath);
   const ws = wb.Sheets["Summary"];
   if (!ws) return [];
   
@@ -273,6 +338,26 @@ export function getAllStudents() {
   return json;
 }
 
-export function getExcelFilePath() {
-  return FILE_PATH;
+export function getWorkbookAoA(stream: string = 'CSE ICP') {
+  const filePath = getFilePath(stream);
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  const wb = XLSX.readFile(filePath);
+  
+  const getSheetData = (sheetName: string) => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) return [];
+    return XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+  };
+
+  return {
+    withOther: getSheetData("With OTHER"),
+    withoutOther: getSheetData("Without OTHER"),
+    summary: getSheetData("Summary")
+  };
+}
+
+export function getExcelFilePath(stream: string = 'CSE ICP') {
+  return getFilePath(stream);
 }
