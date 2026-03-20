@@ -45,7 +45,7 @@ export function SemesterForm({ semester, initialResults, onSubmit, onBack }: Pro
           Credits: {currentCredits} / {totalPossible}
         </div>
       </div>
-      
+
       <div className="p-4 sm:p-6">
         <div className="space-y-1">
           {semester.subjects.map((sub, idx) => {
@@ -65,18 +65,16 @@ export function SemesterForm({ semester, initialResults, onSubmit, onBack }: Pro
                   <button
                     type="button"
                     onClick={() => handleToggle(sub.name, true)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                      isPassed ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'
-                    }`}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${isPassed ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+                      }`}
                   >
                     Pass
                   </button>
                   <button
                     type="button"
                     onClick={() => handleToggle(sub.name, false)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                      !isPassed ? 'bg-white text-rose-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'
-                    }`}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${!isPassed ? 'bg-white text-rose-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+                      }`}
                   >
                     Fail
                   </button>
@@ -87,14 +85,14 @@ export function SemesterForm({ semester, initialResults, onSubmit, onBack }: Pro
         </div>
 
         <div className="mt-6 sm:mt-8 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4">
-          <button 
+          <button
             onClick={onBack}
             className="w-full sm:w-auto px-6 btn-secondary bg-white"
           >
             <ArrowLeft className="w-5 h-5" />
             Back
           </button>
-          <button 
+          <button
             onClick={() => onSubmit(results)}
             className="flex-1 btn-primary"
           >
