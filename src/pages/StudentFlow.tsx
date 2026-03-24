@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { semesters as cseSemesters } from '../data/subjects';
 import { aimlSemesters } from '../data/subjects-aiml';
 import { ResultsMap, StudentData } from '../utils/evaluation';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, Search } from 'lucide-react';
 import { StudentForm } from '../components/StudentForm';
 import { AllPassSelection } from '../components/AllPassSelection';
 import { SemesterForm } from '../components/SemesterForm';
@@ -186,8 +186,14 @@ export default function StudentFlow({ stream }: StudentFlowProps) {
           <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--color-primary)]" />
           <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-[var(--color-primary)]">ICP</h1>
         </div>
-        <div className="text-xs sm:text-sm font-medium text-[var(--color-text)] opacity-70">
-          {stream}
+        <div className="flex items-center gap-4">
+          <Link to="/search" className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 px-3 py-1.5 rounded-lg transition-colors">
+            <Search className="w-4 h-4" />
+            Search
+          </Link>
+          <div className="text-xs sm:text-sm font-medium text-[var(--color-text)] opacity-70">
+            {stream}
+          </div>
         </div>
       </header>
       
