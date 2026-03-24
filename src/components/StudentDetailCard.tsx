@@ -9,9 +9,10 @@ interface Props {
   onUpdate?: () => void;
   stream?: string;
   semesters: Semester[];
+  readOnly?: boolean;
 }
 
-export default function StudentDetailCard({ submission, index, adminToken, onUpdate, stream = 'CSE ICP', semesters }: Props) {
+export default function StudentDetailCard({ submission, index, adminToken, onUpdate, stream = 'CSE ICP', semesters, readOnly = false }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [filters, setFilters] = useState({ core: false, mandatory: false });
@@ -118,7 +119,8 @@ export default function StudentDetailCard({ submission, index, adminToken, onUpd
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end mt-2 sm:mt-0">
+          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end mt-2 sm:mt-0">
+          {!readOnly && (
           <div className="flex items-center gap-1 sm:mr-2" onClick={e => e.stopPropagation()}>
             {isEditing ? (
               <>
@@ -156,6 +158,7 @@ export default function StudentDetailCard({ submission, index, adminToken, onUpd
               </>
             )}
           </div>
+          )}
 
           {!isEditing && (
             <>
@@ -178,17 +181,17 @@ export default function StudentDetailCard({ submission, index, adminToken, onUpd
               <div className="hidden sm:flex flex-wrap items-center gap-2 text-xs md:text-sm justify-end">
               {/* Overall Eligibility Badge */}
               {resultsWithOther.crit1 && resultsWithOther.crit2 && resultsWithOther.crit3 && resultsWithOther.crit4 ? (
-                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 shadow-sm">
+                <span className="whitespace-nowrap px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 shadow-sm flex items-center justify-center min-w-[100px]">
                   ELIGIBLE
                 </span>
               ) : (
-                <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200 shadow-sm">
+                <span className="whitespace-nowrap px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200 shadow-sm flex items-center justify-center min-w-[100px]">
                   NOT ELIGIBLE
                 </span>
               )}
 
               {/* Status Indicators */}
-              <div className="flex items-center gap-1.5 ml-2 border-l border-stone-200 pl-3">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 ml-0 sm:ml-2 sm:border-l border-stone-200 sm:pl-3 w-full sm:w-auto mt-2 sm:mt-0">
                 <span title={`Total Credits: ${resultsWithOther.totalCredits} / 80`} className={`px-2 py-0.5 rounded text-xs font-medium border ${resultsWithOther.crit1 ? 'bg-stone-50 text-stone-600 border-stone-200' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>
                   Cr: {resultsWithOther.totalCredits}
                 </span>
@@ -358,7 +361,7 @@ export default function StudentDetailCard({ submission, index, adminToken, onUpd
                               </div>
                               
                               <div className="flex justify-end">
-                              {isEditing ? (
+                              {!readOnly && isEditing ? (
                                 <select 
                                   className="border border-stone-300 rounded px-1 py-0.5 text-xs bg-white text-stone-700 cursor-pointer"
                                   value={passed ? 'pass' : 'fail'}
