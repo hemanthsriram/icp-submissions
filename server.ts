@@ -10,12 +10,21 @@ import { upsertStudentToExcel, getAllStudents, getExcelFilePath } from './server
 import { saveSubmission, getAllSubmissions, deleteSubmission } from './server/db';
 import { adminAuth } from './server/auth';
 import { connectGoogleSheets, initializeSheetsClient, isSheetsConnected, syncToGoogleSheets } from './server/sheets';
+import { supabase } from './server/supabase';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/test', (req, res) => {
+  res.json({ ok: true });
+});
+
+app.get('/api/foo/:id', (req, res) => {
+  res.json({ foo: req.params.id });
+});
 
 // SSE Clients
 let sseClients: any[] = [];
@@ -53,6 +62,69 @@ app.post('/api/submit', async (req, res) => {
     res.status(500).json({ error: 'Failed to submit data' });
   }
 });
+
+// --- PUBLIC SEARCH ROUTES ---
+app.get('/api/search/:hallTicket', async (req, res) => {
+  try {
+    const hallTicket = req.params.hallTicket.toUpperCase();
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('hall_ticket', hallTicket)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Search error:', error);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    res.json({
+      studentData: data.student_data,
+      results: data.results,
+      resultsWithOther: data.results_with_other,
+      resultsWithoutOther: data.results_without_other,
+      timestamp: data.created_at,
+      branch: data.branch
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/submissions/stream/:stream', async (req, res) => {
+  try {
+    const stream = req.params.stream;
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('branch', stream)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Stream sort error:', error);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    const mappedData = (data || []).map((row: any) => ({
+      studentData: row.student_data,
+      results: row.results,
+      resultsWithOther: row.results_with_other,
+      resultsWithoutOther: row.results_without_other,
+      timestamp: row.created_at,
+      branch: row.branch,
+      id: row.id
+    }));
+
+    res.json(mappedData);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+// ----------------------------
 
 // Admin Routes
 app.post('/api/admin/rebuild', adminAuth, async (req, res) => {
@@ -218,6 +290,10 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      // Don't catch API routes — let them 404 naturally
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'API route not found' });
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
