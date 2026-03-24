@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import StudentFlow from './pages/StudentFlow';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentSuccess from './pages/StudentSuccess';
+import SearchPage from './pages/SearchPage';
 
 export default function App() {
   return (
@@ -30,6 +31,9 @@ export default function App() {
 
         {/* Admin dashboard */}
         <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Public Search Page */}
+        <Route path="/search" element={<SearchPage />} />
       </Routes>
     </BrowserRouter>
   );
