@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: icp-submissions
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: NODE_ENV=production tsx server.ts
+    healthCheckPath: /api/test
